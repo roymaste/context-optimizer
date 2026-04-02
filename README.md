@@ -1,6 +1,6 @@
 # Context Optimizer
 
-**Solve LLM token explosion and memory loss in AI agent systems.**
+**Keep AI agents from forgetting. Keep context small.**
 
 ## What It Does
 

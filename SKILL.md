@@ -1,6 +1,6 @@
 ---
 name: context-optimizer
-description: "Solve LLM token explosion and memory loss in multi-agent systems. Use when: (1) building multi-agent collaboration systems, (2) dealing with context window overflow, (3) agents forget important information between sessions, (4) need efficient memory synchronization across agents. Provides hot-layer summary, cold-layer vector storage, and automatic decision tracking to keep context under 500 tokens while preserving critical information."
+description: "Keep AI agents from forgetting. Keep context small. Use when: (1) building multi-agent systems, (2) context window overflow, (3) agents forget between sessions, (4) need memory sync across agents. Hot layer (<500 tokens) + cold layer (vector search) + auto decisions. Zero memory loss."
 ---
 
 # Context Optimizer
