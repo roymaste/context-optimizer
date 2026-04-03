@@ -1,5 +1,5 @@
 ---
-name: context-optimizer
+name: agent-context-optimizer
 description: "Keep AI agents from forgetting. Keep context small. Use when: (1) building multi-agent systems, (2) context window overflow, (3) agents forget between sessions, (4) need memory sync across agents. Hot layer (<500 tokens) + cold layer (vector search) + auto decisions. Zero memory loss."
 ---
 
@@ -167,3 +167,44 @@ const enhancedPrompt = hotContext + "\n\n" + newMessage;
 const stats = optimizer.getStats();
 console.log(stats.decisionsCount); // Number of decisions tracked
 ```
+
+---
+
+## ⚠️ Important: Behavioral Integration Required
+
+**This skill is a tool. It does NOT auto-trigger.**
+
+The skill provides the engine (`ContextOptimizer`) and the startup helper (`onAgentStartup`), but the agent must be configured to actually CALL these functions.
+
+### What YOU Must Do (Agent Configuration)
+
+**1. Add to SOUL.md (or AGENTS.md) startup rules:**
+```markdown
+## 🔄 Memory Recovery (Mandatory on Every Wake)
+
+On first message of each session:
+1. Call `memory_search()` to retrieve relevant memories
+2. Call `onAgentStartup('agent-name')` to build hot context
+3. Inject hot context into current session
+4. If context exists, use it; otherwise, start fresh
+```
+
+**2. Add to HEARTBEAT.md (end-of-session rules):**
+```markdown
+## After Each Session
+- Call `optimizer.summarize(conversationHistory)`
+- Call `sidecarUpdater.onSessionComplete()`
+```
+
+### Why This Matters
+
+- **Without integration**: Agent reads the skill file but never calls it → context loss continues
+- **With integration**: Agent explicitly calls the tool → hot layer stays under 500 tokens
+
+### Real-World Lesson (2026-04-03)
+
+> Even with the skill installed and SOUL.md rules written, if the agent doesn't EXPLICITLY call `memory_search` on wake, the memory system fails. The tool + the rule + the execution = all three required.
+
+### GitHub PR
+
+This skill was submitted to [MiniMax-AI/skills PR #58](https://github.com/MiniMax-AI/skills/pull/58). The skill itself is complete; integration is the implementer's responsibility.
