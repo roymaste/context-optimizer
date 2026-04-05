@@ -1,37 +1,31 @@
 ---
 name: agent-context-optimizer
-description: "Keep AI agents from forgetting. Keep context small. Use when: (1) building multi-agent systems, (2) context window overflow, (3) agents forget between sessions, (4) need memory sync across agents. Hot layer (<500 tokens) + cold layer (vector search) + auto decisions. Zero memory loss."
+description: "Context Optimizer for OpenClaw - Hot/Cold memory layer with auto-summarize. Use when: (1) building multi-agent systems, (2) context window overflow, (3) agents forget between sessions, (4) need memory sync across agents. Hot layer (<500 tokens) + cold layer (vector search) + auto decisions. Zero memory loss. Now with message:received hook for automatic triggering."
 ---
 
 # Context Optimizer
 
+**Keep AI agents from forgetting. Keep context small.**
+
 ## Overview
 
-Solve LLM token explosion and memory loss with a dual-memory architecture: hot-layer (<500 tokens) for immediate context, cold-layer for persistent storage. Enables "low token, zero memory loss" for agent systems.
+Solve LLM token explosion and memory loss with a dual-memory architecture:
+- **Hot Layer** (<500 tokens): Recent summaries, decisions, current tasks
+- **Cold Layer** (unlimited): Full history, vector-indexed for retrieval
+
+**New in v2.0**: Automatic triggering via `message:received` hook - no manual activation needed!
 
 ## Quick Start
 
-```javascript
-// 1. Import the optimizer
-const { ContextOptimizer } = require('./scripts/context-optimizer');
+```bash
+# Install
+clawhub install agent-context-optimizer
 
-// 2. Create instance
-const optimizer = new ContextOptimizer();
-
-// 3. After conversation ends - auto-summary
-await optimizer.summarize(conversationMessages);
-
-// 4. Get hot context for next turn
-const hotContext = optimizer.getHotContext();
-
-// 5. Check stats
-console.log(optimizer.getStats());
-// {summaryCount: 1, decisionCount: 3, taskCount: 2, tokenCount: 280, maxTokens: 500}
+# The skill auto-installs the hook
+# Every user message triggers automatic summarize
 ```
 
-## Core Concepts
-
-### Dual-Layer Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────┐
@@ -41,170 +35,87 @@ console.log(optimizer.getStats());
 │  - Current tasks                    │
 │  - Key facts                        │
 ├─────────────────────────────────────┤
-│  COLD Layer (unlimited)             │
+│  COLD Layer (unlimited)            │
 │  - Full conversation history        │
 │  - Vector indexed for retrieval     │
-│  - Loaded on-demand                 │
+│  - Loaded on-demand                │
 └─────────────────────────────────────┘
 ```
 
-### Memory Flow
+## How It Works
 
-```
-Conversation End → Extract decisions → Update hot layer → Compress if needed
-                                    → Index to cold layer
-                                    
-Next Turn → Read hot layer (<500 tokens) → LLM call
-         → If needed,检索 cold layer
-```
+### Triggering (v2.0 - Automatic!)
 
-## Scripts
+**No manual activation needed!**
 
-### context-optimizer.js
+The skill installs a hook that listens to `message:received` events:
 
-Core summary engine. Call after each conversation turn.
+1. **Every user message** → Hook triggered
+2. Hook checks: "Has 5+ minutes passed since last summary?"
+3. If yes → Reads transcript → Generates summary → Updates hot layer
+4. Agent always has fresh context on startup
 
-```javascript
-const { ContextOptimizer } = require('./scripts/context-optimizer');
-const opt = new ContextOptimizer();
+### Files
 
-// After conversation
-await opt.summarize(messages);
-
-// Get optimized context
-const context = opt.getHotContext();
-
-// Export for persistence
-const data = opt.export();
-```
-
-### agent-memory-helper.js
-
-Agent startup loader. Build hot context from shared files.
-
-```javascript
-const { onAgentStartup } = require('./scripts/agent-memory-helper');
-
-// Agent startup - reads PROJECT_STATUS + sidecar
-const hotContext = await onAgentStartup('agent-name');
-```
-
-### sidecar-updater.js
-
-Persistent sidecar for each agent.
-
-```javascript
-const { SidecarUpdater } = require('./scripts/sidecar-updater');
-const updater = new SidecarUpdater();
-
-// After agent completes task
-await updater.onSessionComplete('agent-name', messages, {
-  extractDecisions: true,
-  extractTasks: true
-});
-```
-
-### dual-memory.js
-
-Full hot+cold implementation with vector search.
-
-```javascript
-const { DualMemory } = require('./scripts/dual-memory');
-const dm = new DualMemory({
-  embedder: openAIEmbedder,  // Optional: custom embedder
-  vectorStore: chromaDB      // Optional: custom vector store
-});
-
-// End of conversation
-await dm.onConversationEnd(conversation);
-
-// Get context - auto retrieves from cold if needed
-const context = await dm.getContextForLLM();
-```
-
-## Reference
-
-See `references/AGENT_MEMORY_ARCHITECTURE.md` for:
-- Detailed architecture design
-- Token calculation formulas
-- Integration patterns
-- Implementation roadmap
+| File | Purpose |
+|------|---------|
+| `hook/HOOK.md` | Hook metadata (events: message:received) |
+| `hook/handler.ts` | Auto-summarize on every user message |
+| `scripts/context-optimizer.js` | Core summary engine |
+| `scripts/agent-memory-helper.js` | Startup context builder |
 
 ## Configuration
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| MAX_HOT_TOKENS | 500 | Max tokens in hot layer |
-| MAX_SUMMARIES | 3 | Recent summaries to keep |
-| MAX_DECISIONS | 20 | Decisions to track |
-| SUMMARY_TURNS | 3 | Conversation turns per summary |
+| MIN_INTERVAL_MS | 300000 (5 min) | Min time between summaries |
+| HOT_LAYER_FILE | knowledge/agents/main/sidecar.md | Hot layer path |
+| LAST_SUMMARY_FILE | memory/.last_summary | Timestamp file |
 
-## Use Cases
+## Installation
 
-**1. Multi-Agent Coordination**
-```javascript
-// Main agent: summarize and delegate
-await mainOptimizer.summarize(history);
-const task = "Research supplier for xxx";
-await sessions_send(subAgent, task + "\n\nRead: PROJECT_STATUS.md");
-
-// Sub agent: build context at startup
-const context = await onAgentStartup('sub-agent');
+```bash
+clawhub install agent-context-optimizer
 ```
 
-**2. Long Conversation Memory**
-```javascript
-// After each turn
-await optimizer.summarize(turnMessages);
+This automatically:
+1. Copies hook to `~/.openclaw/hooks/`
+2. Enables the hook
+3. Creates necessary directories
 
-// Next turn - inject hot context
-const enhancedPrompt = hotContext + "\n\n" + newMessage;
+## Manual Setup
+
+```bash
+# Create hook directory
+mkdir -p ~/.openclaw/hooks/context-optimizer-session
+
+# Copy files
+cp HOOK.md ~/.openclaw/hooks/context-optimizer-session/
+cp handler.ts ~/.openclaw/hooks/context-optimizer-session/
+
+# Enable
+openclaw hooks enable context-optimizer-session
 ```
 
-**3. Decision Tracking**
-```javascript
-// Decisions extracted automatically
-const stats = optimizer.getStats();
-console.log(stats.decisionsCount); // Number of decisions tracked
+## Events
+
+| Event | Trigger |
+|-------|---------|
+| `message:received` | Every user message - triggers check |
+
+## Testing
+
+```bash
+# Check hook status
+openclaw hooks list | grep context-optimizer
+
+# Watch logs
+tail -f ~/.openclaw/logs/*.log | grep context-optimizer
+
+# Send a message and check hot layer
+cat ~/.openclaw/workspace/knowledge/agents/main/sidecar.md
 ```
 
----
+## License
 
-## ⚠️ Important: Behavioral Integration Required
-
-**This skill is a tool. It does NOT auto-trigger.**
-
-The skill provides the engine (`ContextOptimizer`) and the startup helper (`onAgentStartup`), but the agent must be configured to actually CALL these functions.
-
-### What YOU Must Do (Agent Configuration)
-
-**1. Add to SOUL.md (or AGENTS.md) startup rules:**
-```markdown
-## 🔄 Memory Recovery (Mandatory on Every Wake)
-
-On first message of each session:
-1. Call `memory_search()` to retrieve relevant memories
-2. Call `onAgentStartup('agent-name')` to build hot context
-3. Inject hot context into current session
-4. If context exists, use it; otherwise, start fresh
-```
-
-**2. Add to HEARTBEAT.md (end-of-session rules):**
-```markdown
-## After Each Session
-- Call `optimizer.summarize(conversationHistory)`
-- Call `sidecarUpdater.onSessionComplete()`
-```
-
-### Why This Matters
-
-- **Without integration**: Agent reads the skill file but never calls it → context loss continues
-- **With integration**: Agent explicitly calls the tool → hot layer stays under 500 tokens
-
-### Real-World Lesson (2026-04-03)
-
-> Even with the skill installed and SOUL.md rules written, if the agent doesn't EXPLICITLY call `memory_search` on wake, the memory system fails. The tool + the rule + the execution = all three required.
-
-### GitHub PR
-
-This skill was submitted to [MiniMax-AI/skills PR #58](https://github.com/MiniMax-AI/skills/pull/58). The skill itself is complete; integration is the implementer's responsibility.
+MIT
